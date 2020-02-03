@@ -1,8 +1,5 @@
 """
-Sensor for checking the status of Hue sensors.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/sensor.hue/
+Hue remotes.
 """
 import asyncio
 import async_timeout
@@ -10,8 +7,15 @@ import logging
 import threading
 from datetime import timedelta
 
-from homeassistant.components.sensor import PLATFORM_SCHEMA
-from homeassistant.helpers.entity import Entity
+from homeassistant.components.remote import (
+    PLATFORM_SCHEMA,
+    RemoteDevice,
+)
+from homeassistant.helpers.entity import (
+    Entity,
+    ToggleEntity,
+)
+
 from homeassistant.helpers.event import async_track_time_interval
 
 DEPENDENCIES = ["hue"]
@@ -20,41 +24,29 @@ DEPENDENCIES = ["hue"]
 _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(seconds=0.1)
-TYPE_GEOFENCE = "Geofence"
+
 ICONS = {
-    "SML": "mdi:run",
     "RWL": "mdi:remote",
-    "ROM": "mdi:remote",    
+    "ROM": "mdi:remote",
     "ZGP": "mdi:remote",
     "FOH": "mdi:light-switch",
     "Z3-": "mdi:light-switch",
 }
-DEVICE_CLASSES = {"SML": "motion"}
+
 ATTRS = {
-    "SML": [
-        "light_level",
-        "battery",
+    "RWL": ["last_updated", "last_button_event", "battery", "on", "reachable"],
+    "ROM": ["last_updated", "last_button_event", "battery", "on", "reachable"],
+    "ZGP": ["last_updated", "last_button_event"],
+    "FOH": ["last_updated", "last_button_event"],
+    "Z3-": [
         "last_updated",
-        "lx",
-        "dark",
-        "daylight",
-        "temperature",
+        "last_button_event",
+        "battery",
         "on",
         "reachable",
-        "sensitivity",
-        "threshold",
-    ],
-    "RWL": ["last_updated", "battery", "on", "reachable"],
-    "ROM": ["last_updated", "battery", "on", "reachable"],
-    "ZGP": ["last_updated"],
-    "FOH": ["last_updated"],
-    "Z3-": ["last_updated",
-            "battery",
-            "on",
-            "reachable",
-            "dial_state",
-            "dial_position",
-            "software_update",
+        "dial_state",
+        "dial_position",
+        "software_update",
     ],
 }
 
@@ -66,7 +58,7 @@ def parse_hue_api_response(sensors):
     # Loop over all keys (1,2 etc) to identify sensors and get data.
     for sensor in sensors:
         modelid = sensor["modelid"][0:3]
-        if modelid in ["RWL", "ROM", "SML"]:
+        if modelid in ["RWL", "ROM"]:
             _key = modelid + "_" + sensor["uniqueid"][:-5]
             if modelid == "RWL" or modelid == "ROM":
                 data_dict[_key] = parse_rwl(sensor)
@@ -78,22 +70,25 @@ def parse_hue_api_response(sensors):
             elif modelid == "ZGP":
                 data_dict[_key] = parse_zgp(sensor)
 
-        elif modelid == "Z3-": #### Newest Model ID / Lutron Aurora / Hue Bridge treats it as two sensors, I wanted them combined
-            if sensor["type"] == "ZLLRelativeRotary":   # Rotary Dial
-                _key = modelid + "_" + sensor["uniqueid"][:-5] # Rotary key is substring of button
-                key_value = parse_z3_rotary(sensor)     
-            else: # sensor["type"] == "ZLLSwitch"
+        elif (
+            modelid == "Z3-"
+        ):  # Newest Model ID / Lutron Aurora / Hue Bridge treats it as two sensors, I wanted them combined
+            if sensor["type"] == "ZLLRelativeRotary":  # Rotary Dial
+                _key = (
+                    modelid + "_" + sensor["uniqueid"][:-5]
+                )  # Rotary key is substring of button
+                key_value = parse_z3_rotary(sensor)
+            else:
                 _key = modelid + "_" + sensor["uniqueid"]
                 key_value = parse_z3_switch(sensor)
 
-            ##Combine parsed data
-            if _key in data_dict: 
+            # Combine parsed data
+            if _key in data_dict:
                 data_dict[_key].update(key_value)
             else:
                 data_dict[_key] = key_value
-             
-    return data_dict
 
+    return data_dict
 
 def parse_zgp(response):
     """Parse the json response for a ZGPSWITCH Hue Tap."""
@@ -108,6 +103,7 @@ def parse_zgp(response):
         "model": "ZGP",
         "name": response["name"],
         "state": button,
+        "last_button_event": button,
         "last_updated": response["state"]["lastupdated"].split("T"),
     }
     return data
@@ -134,6 +130,7 @@ def parse_rwl(response):
         "battery": response["config"]["battery"],
         "on": response["config"]["on"],
         "reachable": response["config"]["reachable"],
+        "last_button_event": button,
         "last_updated": response["state"]["lastupdated"].split("T"),
     }
     return data
@@ -166,6 +163,7 @@ def parse_foh(response):
         "model": "FOH",
         "name": response["name"],
         "state": button,
+        "last_button_event": button,
         "last_updated": response["state"]["lastupdated"].split("T"),
     }
     return data
@@ -174,10 +172,7 @@ def parse_foh(response):
 def parse_z3_rotary(response):
     """Parse the json response for a Lutron Aurora Rotary Event."""
 
-    Z3_DIAL = {
-        1: "begin",
-        2: "end"
-    }
+    Z3_DIAL = {1: "begin", 2: "end"}
 
     turn = response["state"]["rotaryevent"]
     dial_position = response["state"]["expectedrotation"]
@@ -185,7 +180,7 @@ def parse_z3_rotary(response):
         dial = "No data"
     else:
         dial = Z3_DIAL[turn]
-    
+
     data = {
         "model": "Z3-",
         "name": response["name"],
@@ -199,6 +194,7 @@ def parse_z3_rotary(response):
     }
     return data
 
+
 def parse_z3_switch(response):
     """Parse the json response for a Lutron Aurora."""
 
@@ -206,7 +202,7 @@ def parse_z3_switch(response):
         1000: "initial_press",
         1001: "repeat",
         1002: "short_release",
-        1003: "long_release"
+        1003: "long_release",
     }
 
     press = response["state"]["buttonevent"]
@@ -215,10 +211,9 @@ def parse_z3_switch(response):
     else:
         button = Z3_BUTTON[press]
 
-    data = {
-        "state": button
-    }
+    data = {"last_button_event": button, "state": button}
     return data
+
 
 def get_bridges(hass):
     from homeassistant.components import hue
@@ -245,12 +240,12 @@ async def update_api(api):
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Initialise Hue Bridge connection."""
-    data = HueSensorData(hass, async_add_entities)
+    data = HueRemoteData(hass, async_add_entities)
     await data.async_update_info()
     async_track_time_interval(hass, data.async_update_info, SCAN_INTERVAL)
 
 
-class HueSensorData(object):
+class HueRemoteData(object):
     """Get the latest sensor data."""
 
     def __init__(self, hass, async_add_entities):
@@ -269,26 +264,24 @@ class HueSensorData(object):
         data = parse_hue_api_response(
             sensor.raw
             for sensor in bridge.api.sensors.values()
-            if sensor.type != TYPE_GEOFENCE
         )
 
         new_sensors = data.keys() - self.data.keys()
         updated_sensors = []
         for key, new in data.items():
-            new["changed"] = True
             old = self.data.get(key)
             if not old or old == new:
                 continue
-            updated_sensors.append(key)
             if (
                 old["last_updated"] == new["last_updated"]
                 and old["state"] == new["state"]
             ):
-                new["changed"] = False
+                continue
+            updated_sensors.append(key)
         self.data.update(data)
 
         new_entities = {
-            entity_id: HueSensor(entity_id, self) for entity_id in new_sensors
+            entity_id: HueRemote(entity_id, self) for entity_id in new_sensors
         }
         if new_entities:
             _LOGGER.debug("Created %s", ", ".join(new_entities.keys()))
@@ -316,13 +309,11 @@ class HueSensorData(object):
             self.lock.release()
 
 
-class HueSensor(Entity):
-    """Class to hold Hue Sensor basic info."""
-
-    ICON = "mdi:run-fast"
+class HueRemote(RemoteDevice):
+    """Class to hold Hue Remote basic info."""
 
     def __init__(self, hue_id, data):
-        """Initialize the sensor object."""
+        """Initialize the remote object."""
         self._hue_id = hue_id
         self._data = data.data  # data is in .data
 
@@ -333,22 +324,21 @@ class HueSensor(Entity):
 
     @property
     def name(self):
-        """Return the name of the sensor."""
+        """Return the name of the remote."""
         data = self._data.get(self._hue_id)
         if data:
             return data["name"]
 
     @property
     def unique_id(self):
-        """Return the ID of this Hue sensor."""
+        """Return the ID of this Hue remote."""
         return self._hue_id
 
     @property
     def state(self):
-        """Return the state of the sensor."""
+        """Return the state of the remote."""
         data = self._data.get(self._hue_id)
-        if data and data["changed"]:
-            return data["state"]
+        return data["state"]
 
     @property
     def icon(self):
@@ -361,17 +351,19 @@ class HueSensor(Entity):
         return self.ICON
 
     @property
-    def device_class(self):
-        """Return the class of this device, from component DEVICE_CLASSES."""
-        data = self._data.get(self._hue_id)
-        if data:
-            device_class = DEVICE_CLASSES.get(data["model"])
-            if device_class:
-                return device_class
-
-    @property
     def device_state_attributes(self):
         """Attributes."""
         data = self._data.get(self._hue_id)
         if data:
             return {key: data.get(key) for key in ATTRS.get(data["model"], [])}
+
+    @property
+    def force_update(self):
+        """Force update."""
+        return True
+
+    def turn_on(self, **kwargs):
+        """Do nothing."""
+
+    def turn_off(self, **kwargs):
+        """Do nothing."""

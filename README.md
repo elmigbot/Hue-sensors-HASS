@@ -1,22 +1,30 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 [![Sponsor](https://img.shields.io/badge/sponsor-%F0%9F%92%96-green)](https://github.com/sponsors/robmarkcole)
 
-
 # Hue-sensors-HASS
 [FOR COMMUNITY SUPPORT PLEASE USE THIS THREAD](https://community.home-assistant.io/t/hue-motion-sensors-remotes-custom-component)
 
-Place the custom_components folder in your configuration directory (or add its contents to an existing custom_components folder). You need to set up [Hue bridge](https://www.home-assistant.io/components/hue/) first.
+## Overview
+This custom component provides support for Hue motion sensors, remotes, and some friends of Hue devices.
 
-Hue dimmer remotes can be used for a click and long press (hold button for 2 sec and see LED blink twice).
+## Installation
+
+Place the `custom_components` folder in your configuration directory (or add its contents to an existing `custom_components` folder). You need to set up your [Hue bridge](https://www.home-assistant.io/integrations/hue) first. Alternatively install via [HACS](https://hacs.xyz/).
+
+## Configuration
+
+Once installed add to your configuration:
 
 ```
 binary_sensor:
   - platform: huesensor
+remote:
+  - platform: huesensor
 device_tracker:
   - platform: huesensor
-sensor:
-  - platform: huesensor
 ```
+
+Hue dimmer remotes can be used for a click and long press (hold button for 2 sec and see LED blink twice).
 
 As per [this issue](https://github.com/robmarkcole/Hue-sensors-HASS/issues/48) it is recommended to use the default naming options in the Hue app in order to ensure sensible sensor names in HA.
 
@@ -35,12 +43,6 @@ Hue:
     - binary_sensor.bedroom_motion_sensor
     - binary_sensor.hall_motion_sensor
     - binary_sensor.living_room_motion_sensor
-    - sensor.living_room_temperature
-    - sensor.living_room_light_level
-    - sensor.living_room_lux
-    - sensor.living_room_remote
-    - sensor.remote_bedroom
-    - device_tracker.robins_iphone
 ```
 
 Temperature, light level and other data in the sensor attributes can be broken out into their own sensor using a template sensor, for example:
@@ -65,7 +67,8 @@ Temperature, light level and other data in the sensor attributes can be broken o
 </p>
 
 ## Track Updates
-This custom component can be tracked with the help of [HACS](https://github.com/custom-components/hacs).
+
+This custom component can be tracked with the help of [HACS](https://hacs.xyz/).
 
 ## Debugging
 
@@ -78,6 +81,9 @@ If you get an error when using this component, the procedure for debugging is as
 There are a couple of examples of this process in the debugging_issues folder.
 
 ## Contributors
+
+Please format code usign [Black](https://github.com/psf/black) before opening a pull request.
+
 A big thanks to [@yottatsa](https://github.com/yottatsa) for his many contributions to this work, check out his profile!
 
 ## ✨ Support this work
